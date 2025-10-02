@@ -1,0 +1,13 @@
+#!/bin/bash
+
+PROGRAM="wordle-assist"
+PLATFORMS=("linux/amd64" "linux/arm64" "windows/amd64" "darwin/amd64" "darwin/arm64")
+
+for PLATFORM in "${PLATFORMS[@]}"; do
+    OS=${PLATFORM%/*}
+    ARCH=${PLATFORM#*/}
+    echo "Building for $OS/$ARCH..."
+    OUTPUT="bin/${PROGRAM}_${OS}_${ARCH}"
+    [ "$OS" = "windows" ] && OUTPUT+=".exe"
+    GOOS=$OS GOARCH=$ARCH go build -o $OUTPUT main.go
+done
