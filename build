@@ -9,5 +9,5 @@ for PLATFORM in "${PLATFORMS[@]}"; do
     echo "Building for $OS/$ARCH..."
     OUTPUT="bin/${PROGRAM}_${OS}_${ARCH}"
     [ "$OS" = "windows" ] && OUTPUT+=".exe"
-    GOOS=$OS GOARCH=$ARCH go build -o $OUTPUT main.go
+    GOOS=$OS GOARCH=$ARCH go build -ldflags="-s -w" -o $OUTPUT main.go
 done
