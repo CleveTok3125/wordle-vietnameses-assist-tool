@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
 )
@@ -75,21 +73,6 @@ func loadDict(url string) (map[string][]SubDict, error) {
 	return dict, nil
 }
 
-func parsePattern(query string) ([]SyllableCond, string) {
-	parts := strings.Split(query, "-")
-	conds := []SyllableCond{}
-	mustChars := ""
-
-	for _, p := range parts {
-		if n, err := strconv.Atoi(p); err == nil {
-			conds = append(conds, SyllableCond{Length: n})
-		} else {
-			mustChars += p
-		}
-	}
-	return conds, mustChars
-}
-
 func removeDiacritics(str string) string {
 	t := norm.NFD.String(str)
 
@@ -110,7 +93,7 @@ func removeDiacritics(str string) string {
 	return b.String()
 }
 
-func matchWildcard(pattern, text string) bool {
+func matchWildcard(pattern, text, required, excluded string) bool {
 	pRunes := []rune(pattern)
 	tRunes := []rune(text)
 
@@ -126,26 +109,19 @@ func matchWildcard(pattern, text string) bool {
 			return false
 		}
 	}
-	return true
-}
 
-func matchSyllablePatternWithChars(word string, conds []SyllableCond, mustChars string) bool {
-	parts := strings.Fields(word)
-	if len(parts) != len(conds) {
-		return false
-	}
-
-	for i, part := range parts {
-		if utf8.RuneCountInString(part) != conds[i].Length {
+	for _, ch := range required {
+		if !strings.ContainsRune(text, ch) {
 			return false
 		}
 	}
 
-	for _, ch := range mustChars {
-		if !strings.ContainsRune(word, ch) {
+	for _, ch := range excluded {
+		if strings.ContainsRune(text, ch) {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -162,27 +138,25 @@ func main() {
 	usage := `
 Hướng dẫn sử dụng
 Tất cả các ký tự được nhập phải là chữ cái trong bảng chữ cái tiếng Anh.
-So khớp từ cụ thể: Sử dụng * cho các chữ cái bất kỳ. Phân tách các âm tiết bằng dấu cách.
+
+So khớp từ cụ thể: Sử dụng * cho các chữ cái bất kỳ. Phân tách các âm tiết bằng dấu cách. Bạn có thể thêm các chữ cái vào cuối để khớp với các từ không chứa (-) hoặc chứa (+) các chữ cái đó.
 Ví dụ:
-- "viet ***" sẽ khớp với các từ "viet nam", "viet hoa", "viet ngu"
+- "viet ***" sẽ khớp với các từ "viet nam", "viet hoa", "viet ngu", v.v.
 - "*an" sẽ khớp với các từ "can", "san", "tan", "man", v.v.
-Âm tiết và số lượng từ trong âm tiết: Sử dụng số nguyên cho số lượng chữ cái trong âm tiết và dấu gạch nối để phân tách các âm tiết. Bạn có thể thêm các chữ cái vào cuối để khớp với các từ chứa các chữ cái đó.
-Ví dụ:
-- "3-4" sẽ khớp với các từ có 7 chữ cái và 2 âm tiết, trong đó âm tiết thứ nhất có 3 chữ cái, âm tiết thứ hai có 4 chữ cái.
-- "3-4-3-aug" sẽ khớp với các từ có 7 chữ cái và 3 âm tiết, trong đó âm tiết thứ nhất có 3 chữ cái, âm tiết thứ hai có 4 chữ cái, âm tiết thứ ba có 3 chữ cái và từ phải chứa tất cả các chữ cái "a", "u", "g" bất kể số lần xuất hiện, thứ tự và vị trí.
+- "viet *** -oh" sẽ khớp với các từ "viet nam", "viet ngu", "viet tay" nhưng không khớp "viet hoa" vì từ đó có chứa "o" và "h".
+- "viet *** +a" sẽ khớp với các từ "viet nam", "viet tay" nhưng không khớp "viet ngu" vì từ đó không chứa "a".
+- "viet *** -oh +a" hoặc "viet *** +a -oh" sẽ kết hợp điều kiện từ hai ví dụ trên.
 
 Usage:
-All characters entered must be letters of the English alphabet
-Specific word matching: Use * for arbitrary letters. Separate syllables with spaces.
+All characters entered must be letters of the English alphabet.
 
+Match specific words: Use * for any letters. Separate syllables with spaces. You can add letters at the end to match words that do not contain (-) or contain (+) those letters.
 For example:
-- "viet ***" will match the words "viet tay", "viet hoa", "viet nam", etc
-- "*an" will match the words "can", "san", "tan", "man", etc
-
-Syllable and number of words in syllable: Use integers for the number of letters in the syllable and hyphens to separate syllables. You can add letters at the end to match words containing those letters.
-For example:
-- "3-4-3" will match words with 7 letters and 3 syllables, the first syllable has 3 letters, the second syllable has 4 letters, the third syllable has 3 letters
-- "3-4-aug" will match words with 7 letters and 2 syllables, the first syllable has 3 letters, the second syllable has 4 letters and the word must contain all the letters "a", "u", "g" regardless of the number of occurrences, order and position
+- "viet ***" will match the words "viet nam", "viet hoa", "viet ngu", etc.
+- "*an" will match the words "can", "san", "tan", "man", etc.
+- "viet *** -oh" will match the words "viet nam", "viet ngu", "viet tay" but not "viet hoa" because it contains "o" and "h".
+- "viet *** +a" will match the words "viet nam", "viet tay" but not "viet ngu" because it does not contain "a".
+- "viet *** -oh +a" or "viet *** +a -oh" will combine the conditions from the two examples above.
 `
 
 	fmt.Println("Type !help for usage")
@@ -191,22 +165,37 @@ For example:
 	query, _ := reader.ReadString('\n')
 	query = strings.TrimSpace(query)
 
-	switch {
-		case query == "!help":
+	switch  query{
+		case "!help":
 			fmt.Println(usage)
-
-		case strings.Contains(query, "-"):
-			conds, mustChars := parsePattern(query)
-			for word := range dict {
-				if matchSyllablePatternWithChars(removeDiacritics(word), conds, mustChars) {
-					fmt.Println(">", word)
-				}
-			}
 		default:
 			queryNorm := strings.ToLower(removeDiacritics(query))
+
+			queryParts := strings.Split(queryNorm, " ")
+			queryPattern := ""
+			excludedChars := ""
+			requiredChars := ""
+
+			for _, part := range queryParts {
+				if len(part) > 0 && part[0] == '-' {
+					excludedChars += part[1:]
+				} else if len(part) > 0 && part[0] == '+' {
+					requiredChars += part[1:]
+				} else {
+					if queryPattern != "" {
+						queryPattern += " "
+					}
+					queryPattern += part
+				}
+			}
+
+			// fmt.Println(queryPattern)
+			// fmt.Println(excludedChars)
+			// fmt.Println(requiredChars)
+
 			for word := range dict {
 				wordNorm := strings.ToLower(removeDiacritics(word))
-				if matchWildcard(queryNorm, wordNorm) {
+				if matchWildcard(queryPattern, wordNorm, requiredChars, excludedChars) {
 					fmt.Printf("> %s\n", word)
 				}
 			}
