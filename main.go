@@ -94,30 +94,45 @@ func removeDiacritics(str string) string {
 }
 
 func matchWildcard(pattern, text, required, excluded string) bool {
-	pRunes := []rune(pattern)
-	tRunes := []rune(text)
+	pattern = normalizeSpaces(pattern)
 
-	if len(pRunes) != len(tRunes) {
+	pWords := strings.Split(pattern, " ")
+	tWords := strings.Split(text, " ")
+
+	if len(pWords) != len(tWords) {
 		return false
 	}
 
-	for i := range pRunes {
-		if pRunes[i] == '*' {
-			continue
-		}
-		if pRunes[i] != tRunes[i] {
+	var allWildcardRunes []rune
+
+	for i := range pWords {
+		pw := []rune(pWords[i])
+		tw := []rune(tWords[i])
+
+		if len(pw) != len(tw) {
 			return false
 		}
+
+		for j := range pw {
+			if pw[j] == '*' {
+				allWildcardRunes = append(allWildcardRunes, tw[j])
+			} else {
+				if pw[j] != tw[j] {
+					return false
+				}
+			}
+		}
 	}
+
+	wildcardText := string(allWildcardRunes)
 
 	for _, ch := range required {
-		if !strings.ContainsRune(text, ch) {
+		if !strings.ContainsRune(wildcardText, ch) {
 			return false
 		}
 	}
-
 	for _, ch := range excluded {
-		if strings.ContainsRune(text, ch) {
+		if strings.ContainsRune(wildcardText, ch) {
 			return false
 		}
 	}
@@ -125,16 +140,15 @@ func matchWildcard(pattern, text, required, excluded string) bool {
 	return true
 }
 
+func normalizeSpaces(s string) string {
+	return strings.Join(strings.Fields(s), " ")
+}
+
 func clearScreen() {
 	fmt.Print("\033[H\033[2J")
 }
 
-func main() {
-	clearScreen()
-	fmt.Println("Loading dictionary...")
-	url := "https://raw.githubusercontent.com/minhqnd/wordle-vietnamese/main/lib/dictionary_vi.json"
-	dict, _ := loadDict(url)
-
+func ui(dict map[string][]SubDict) {
 	usage := `
 Hướng dẫn sử dụng
 Tất cả các ký tự được nhập phải là chữ cái trong bảng chữ cái tiếng Anh.
@@ -147,6 +161,8 @@ Ví dụ:
 - "viet *** +a" sẽ khớp với các từ "viet nam", "viet tay" nhưng không khớp "viet ngu" vì từ đó không chứa "a".
 - "viet *** -oh +a" hoặc "viet *** +a -oh" sẽ kết hợp điều kiện từ hai ví dụ trên.
 
+Mẹo: sử dụng khớp bao gồm với các chữ cái có trong từ nhưng sai vị trí và khớp loại trừ với các chữ cái không có trong từ từ các lần đoán trước.
+
 Usage:
 All characters entered must be letters of the English alphabet.
 
@@ -157,17 +173,22 @@ For example:
 - "viet *** -oh" will match the words "viet nam", "viet ngu", "viet tay" but not "viet hoa" because it contains "o" and "h".
 - "viet *** +a" will match the words "viet nam", "viet tay" but not "viet ngu" because it does not contain "a".
 - "viet *** -oh +a" or "viet *** +a -oh" will combine the conditions from the two examples above.
+
+Tip: Use inclusive matches for letters that are in the word but in the wrong position, and exclusive matches for letters that are not in the word from previous guesses.
 `
 
-	fmt.Println("Type !help for usage")
+	fmt.Println("Type !help for usage or !quit for quit ")
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Print(">>> ")
 	query, _ := reader.ReadString('\n')
 	query = strings.TrimSpace(query)
 
 	switch  query{
+		case "!quit":
+			os.Exit(0)
 		case "!help":
 			fmt.Println(usage)
+			os.Exit(0)
 		default:
 			queryNorm := strings.ToLower(removeDiacritics(query))
 
@@ -194,10 +215,21 @@ For example:
 			// fmt.Println(requiredChars)
 
 			for word := range dict {
-				wordNorm := strings.ToLower(removeDiacritics(word))
+				wordNorm := normalizeSpaces(word)
+				wordNorm = strings.ToLower(removeDiacritics(wordNorm))
 				if matchWildcard(queryPattern, wordNorm, requiredChars, excludedChars) {
 					fmt.Printf("> %s\n", word)
 				}
 			}
+	}
+}
+
+func main() {
+	clearScreen()
+	fmt.Println("Loading dictionary...")
+	url := "https://raw.githubusercontent.com/minhqnd/wordle-vietnamese/main/lib/dictionary_vi.json"
+	dict, _ := loadDict(url)
+	for {
+		ui(dict)
 	}
 }
