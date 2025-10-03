@@ -177,7 +177,6 @@ For example:
 Tip: Use inclusive matches for letters that are in the word but in the wrong position, and exclusive matches for letters that are not in the word from previous guesses.
 `
 
-	fmt.Println("Type !help for usage or !quit for quit ")
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Print(">>> ")
 	query, _ := reader.ReadString('\n')
@@ -189,6 +188,8 @@ Tip: Use inclusive matches for letters that are in the word but in the wrong pos
 		case "!help":
 			fmt.Println(usage)
 			os.Exit(0)
+		case "!clear":
+			clearScreen()
 		default:
 			queryNorm := strings.ToLower(removeDiacritics(query))
 
@@ -229,6 +230,7 @@ func main() {
 	fmt.Println("Loading dictionary...")
 	url := "https://raw.githubusercontent.com/minhqnd/wordle-vietnamese/main/lib/dictionary_vi.json"
 	dict, _ := loadDict(url)
+	fmt.Println("Type:\n- !help for usage\n- !quit for quit\n- !clear for clear screen")
 	for {
 		ui(dict)
 	}
